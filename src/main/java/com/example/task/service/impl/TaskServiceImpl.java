@@ -13,14 +13,19 @@ import java.util.UUID;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort.Direction;
 import org.springframework.stereotype.Service;
+import com.example.task.producer.TaskProducer;
+import com.example.task.domain.dto.TaskDto;
 
 @Service
 public class TaskServiceImpl implements TaskService {
 
   private final TaskRepository taskRepository;
+  private final TaskProducer taskProducer;
 
-  public TaskServiceImpl(TaskRepository taskRepository){
+  public TaskServiceImpl(TaskRepository taskRepository,
+                         TaskProducer taskProducer) {
     this.taskRepository = taskRepository;
+    this.taskProducer = taskProducer;
   }
 
   @Override
@@ -38,7 +43,11 @@ public class TaskServiceImpl implements TaskService {
       now
     );
 
-    return taskRepository.save(task);
+    Task saved = taskRepository.save(task);
+
+    taskProducer.send(toDto(saved));
+
+    return saved;
   }
 
   @Override
@@ -58,12 +67,27 @@ public class TaskServiceImpl implements TaskService {
     task.setPriority(request.priority());
     task.setUpdated(Instant.now());
 
-    return taskRepository.save(task);
+    Task saved = taskRepository.save(task);
+
+    taskProducer.send(toDto(saved));
+
+    return saved;
   }
 
   @Override
   public void deleteTask(UUID taskId) {
     taskRepository.deleteById(taskId);
+    taskProducer.sendDelete(taskId.toString());
   }
 
+  private TaskDto toDto(Task task) {
+    return new TaskDto(
+      task.getId(),
+      task.getTitle(),
+      task.getDescription(),
+      task.getDueDate(),
+      task.getPriority(),
+      task.getStatus()
+    );
+  }
 }
